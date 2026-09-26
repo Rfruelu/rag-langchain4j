@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识片段管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 24px; color: #1a1a1a; font-size: 28px; }
+
+        /* 面包屑导航 */
+        .breadcrumb { margin-bottom: 16px; font-size: 14px; color: #666; }
+        .breadcrumb a { color: #1677ff; text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+
+        /* 搜索栏 */
+        .search-bar { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;
+            background: #fff; padding: 16px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+        .search-bar label { font-size: 14px; color: #555; }
+        .search-bar input, .search-bar select {
+            padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; outline: none; transition: border-color .2s;
+        }
+        .search-bar input:focus, .search-bar select:focus { border-color: #1677ff; }
+
+        /* 按钮 */
+        .btn { padding: 8px 18px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: opacity .2s; }
+        .btn:hover { opacity: .85; }
+        .btn-primary { background: #1677ff; color: #fff; }
+        .btn-success { background: #52c41a; color: #fff; }
+        .btn-danger  { background: #ff4d4f; color: #fff; }
+        .btn-warning { background: #faad14; color: #fff; }
+        .btn-default { background: #fff; color: #333; border: 1px solid #d9d9d9; }
+        .btn-sm { padding: 4px 12px; font-size: 13px; }
+
+        /* 工具栏 */
+        .toolbar { display: flex; justify-content: space-between; margin-bottom: 12px; }
+
+        /* 表格 */
+        .table-wrapper { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.1); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 14px; white-space: nowrap; }
+        th { background: #fafafa; font-weight: 600; color: #555; }
+        tr:hover { background: #f5f7fa; }
+        .status-tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 500; }
+        .status-STORED        { background: #f6ffed; color: #52c41a; }
+        .status-VECTOR_STORED { background: #f0f5ff; color: #2f54eb; }
+
+        /* 文本预览 */
+        .text-preview { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* 分页 */
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 20px; }
+        .pagination button { min-width: 32px; height: 32px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .pagination button.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+        .pagination button:disabled { opacity: .5; cursor: not-allowed; }
+        .pagination span { font-size: 14px; color: #666; }
+
+        /* 模态框 */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; }
+        .modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #fff; border-radius: 8px; width: 560px; max-width: 90vw; z-index: 1001;
+            box-shadow: 0 6px 16px rgba(0,0,0,.12); display: none; max-height: 85vh; overflow-y: auto;
+        }
+        .modal-header { padding: 16px 24px; border-bottom: 1px solid #f0f0f0; font-size: 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header .close { cursor: pointer; font-size: 20px; color: #999; background: none; border: none; }
+        .modal-body { padding: 24px; }
+        .modal-body .form-item { margin-bottom: 16px; }
+        .modal-body .form-item label { display: block; margin-bottom: 6px; font-size: 14px; color: #555; }
+        .modal-body .form-item input, .modal-body .form-item select, .modal-body .form-item textarea {
+            width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; outline: none; transition: border-color .2s;
+        }
+        .modal-body .form-item textarea { resize: vertical; min-height: 100px; }
+        .modal-body .form-item input:focus, .modal-body .form-item select:focus, .modal-body .form-item textarea:focus { border-color: #1677ff; }
+        .modal-footer { padding: 12px 24px; border-top: 1px solid #f0f0f0; text-align: right; display: flex; gap: 8px; justify-content: flex-end; }
+
+        /* 详情 */
+        .detail-row { display: flex; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
+        .detail-label { width: 100px; color: #888; flex-shrink: 0; }
+        .detail-value { flex: 1; word-break: break-all; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- 面包屑导航 -->
+    <div class="breadcrumb">
+        <a href="document.html">文档管理</a> &gt; <span>知识片段管理</span>
+        <span id="docTitleInfo" style="margin-left: 12px; color: #1677ff;"></span>
+    </div>
+
+    <h1>知识片段管理</h1>
+
+    <!-- 搜索栏 -->
+    <div class="search-bar">
+        <label>文档ID：</label>
+        <input id="searchDocId" type="number" placeholder="请输入文档ID">
+        <label>状态：</label>
+        <select id="searchStatus">
+            <option value="">全部</option>
+            <option value="STORED">STORED</option>
+            <option value="VECTOR_STORED">VECTOR_STORED</option>
+        </select>
+        <button class="btn btn-primary" onclick="loadPage(1)">搜索</button>
+        <button class="btn btn-default" onclick="resetSearch()">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+        <div>
+            <button class="btn btn-success" onclick="openAddModal()">+ 新增片段</button>
+            <button class="btn btn-danger" onclick="batchDelete()">批量删除</button>
+        </div>
+        <div>
+            <button class="btn btn-default btn-sm" onclick="loadPage(currentPage)">刷新</button>
+        </div>
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-wrapper">
+        <table>
+            <thead>
+            <tr>
+                <th><input type="checkbox" id="checkAll" onclick="toggleCheckAll()"></th>
+                <th>ID</th>
+                <th>文档ID</th>
+                <th>顺序</th>
+                <th>文本内容</th>
+                <th>分片ID</th>
+                <th>状态</th>
+                <th>跳过嵌入</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- 分页 -->
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- 新增/编辑模态框 -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
+<div class="modal" id="formModal">
+    <div class="modal-header">
+        <span id="modalTitle">新增片段</span>
+        <button class="close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+        <input type="hidden" id="formId">
+        <div class="form-item">
+            <label>文档ID <span style="color:red">*</span></label>
+            <input type="number" id="formDocId" placeholder="请输入所属文档ID">
+        </div>
+        <div class="form-item">
+            <label>文本内容 <span style="color:red">*</span></label>
+            <textarea id="formText" placeholder="请输入文本内容" style="min-height: 150px;"></textarea>
+        </div>
+        <div class="form-item">
+            <label>顺序 <span style="color:red">*</span></label>
+            <input type="number" id="formChunkOrder" placeholder="请输入顺序" value="0">
+        </div>
+        <div class="form-item">
+            <label>分片ID</label>
+            <input type="text" id="formChunkId" placeholder="请输入分片ID">
+        </div>
+        <div class="form-item">
+            <label>状态</label>
+            <select id="formStatus">
+                <option value="STORED">STORED</option>
+                <option value="VECTOR_STORED">VECTOR_STORED</option>
+            </select>
+        </div>
+        <div class="form-item">
+            <label>元数据 (JSON)</label>
+            <textarea id="formMetadata" placeholder='请输入JSON字符串，如 {"key":"value"}'></textarea>
+        </div>
+        <div class="form-item">
+            <label>嵌入ID</label>
+            <input type="text" id="formEmbeddingId" placeholder="请输入嵌入ID">
+        </div>
+        <div class="form-item">
+            <label>跳过嵌入</label>
+            <select id="formSkipEmbedding">
+                <option value="">否</option>
+                <option value="1">是</option>
+            </select>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveSegment()">保存</button>
+    </div>
+</div>
+
+<!-- 详情模态框 -->
+<div class="modal" id="detailModal" style="width:620px;">
+    <div class="modal-header">
+        <span>片段详情</span>
+        <button class="close" onclick="closeDetailModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="detailContent"></div>
+    <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeDetailModal()">关闭</button>
+    </div>
+</div>
+
+<script>
+    const BASE_URL = '/api/segments';
+    let currentPage = 1;
+    let pageSize = 10;
+    let totalPages = 0;
+
+    // 页面加载时读取 URL 参数
+    (function init() {
+        const params = new URLSearchParams(window.location.search);
+        const docId = params.get('documentId');
+        if (docId) {
+            document.getElementById('searchDocId').value = docId;
+            // 尝试加载文档标题
+            loadDocTitle(docId);
+        }
+        loadPage(1);
+    })();
+
+    async function loadDocTitle(docId) {
+        try {
+            const res = await fetch(`/api/documents/${docId}`);
+            const doc = await res.json();
+            if (doc.title) {
+                document.getElementById('docTitleInfo').textContent = '— ' + doc.title;
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    // ========== 分页查询 ==========
+    async function loadPage(page) {
+        currentPage = page;
+        const docId = document.getElementById('searchDocId').value.trim();
+        const status = document.getElementById('searchStatus').value;
+        const params = new URLSearchParams({ pageNum: page, pageSize });
+        if (docId) params.append('documentId', docId);
+        if (status) params.append('status', status);
+
+        try {
+            const res = await fetch(`${BASE_URL}/page?${params}`);
+            const data = await res.json();
+            totalPages = data.pages || 0;
+            renderTable(data.records || []);
+            renderPagination(data);
+        } catch (e) {
+            alert('加载数据失败：' + e.message);
+        }
+    }
+
+    function renderTable(records) {
+        const tbody = document.getElementById('tableBody');
+        if (!records.length) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#999;">暂无数据</td></tr>';
+            return;
+        }
+        tbody.innerHTML = records.map(r => `
+            <tr>
+                <td><input type="checkbox" class="row-check" value="${r.id}"></td>
+                <td>${r.id}</td>
+                <td><a href="segment.html?documentId=${r.documentId}" style="color:#1677ff;">${r.documentId}</a></td>
+                <td>${r.chunkOrder ?? '-'}</td>
+                <td><div class="text-preview" title="${escapeHtml(r.text || '')}">${escapeHtml(truncate(r.text, 50))}</div></td>
+                <td>${r.chunkId || '-'}</td>
+                <td><span class="status-tag status-${r.status || ''}">${r.status || '-'}</span></td>
+                <td>${r.skipEmbedding === 1 ? '是' : '否'}</td>
+                <td>${formatDateTime(r.createdAt)}</td>
+                <td>
+                    <button class="btn btn-primary btn-sm" onclick="viewDetail(${r.id})">详情</button>
+                    <button class="btn btn-warning btn-sm" onclick="openEditModal(${r.id})">编辑</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSegment(${r.id})">删除</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPagination(data) {
+        const div = document.getElementById('pagination');
+        if (data.pages <= 0) { div.innerHTML = ''; return; }
+        let html = `<button ${data.current <= 1 ? 'disabled' : ''} onclick="loadPage(${data.current - 1})">上一页</button>`;
+        for (let i = 1; i <= data.pages; i++) {
+            if (data.pages > 7 && Math.abs(i - data.current) > 2 && i !== 1 && i !== data.pages) {
+                if (i === 2 || i === data.pages - 1) html += '<span>...</span>';
+                continue;
+            }
+            html += `<button class="${i === data.current ? 'active' : ''}" onclick="loadPage(${i})">${i}</button>`;
+        }
+        html += `<button ${data.current >= data.pages ? 'disabled' : ''} onclick="loadPage(${data.current + 1})">下一页</button>`;
+        html += `<span>共 ${data.total} 条</span>`;
+        div.innerHTML = html;
+    }
+
+    // ========== 搜索/重置 ==========
+    function resetSearch() {
+        document.getElementById('searchDocId').value = '';
+        document.getElementById('searchStatus').value = '';
+        document.getElementById('docTitleInfo').textContent = '';
+        loadPage(1);
+    }
+
+    // ========== 全选 ==========
+    function toggleCheckAll() {
+        const checked = document.getElementById('checkAll').checked;
+        document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+    }
+
+    // ========== 新增 ==========
+    function openAddModal() {
+        document.getElementById('modalTitle').textContent = '新增片段';
+        document.getElementById('formId').value = '';
+        document.getElementById('formDocId').value = document.getElementById('searchDocId').value || '';
+        document.getElementById('formText').value = '';
+        document.getElementById('formChunkOrder').value = '0';
+        document.getElementById('formChunkId').value = '';
+        document.getElementById('formStatus').value = 'STORED';
+        document.getElementById('formMetadata').value = '';
+        document.getElementById('formEmbeddingId').value = '';
+        document.getElementById('formSkipEmbedding').value = '';
+        showModal('formModal');
+    }
+
+    // ========== 编辑 ==========
+    async function openEditModal(id) {
+        try {
+            const res = await fetch(`${BASE_URL}/${id}`);
+            const seg = await res.json();
+            if (!seg.id) { alert('片段不存在'); return; }
+            document.getElementById('modalTitle').textContent = '编辑片段';
+            document.getElementById('formId').value = seg.id;
+            document.getElementById('formDocId').value = seg.documentId || '';
+            document.getElementById('formText').value = seg.text || '';
+            document.getElementById('formChunkOrder').value = seg.chunkOrder ?? 0;
+            document.getElementById('formChunkId').value = seg.chunkId || '';
+            document.getElementById('formStatus').value = seg.status || 'STORED';
+            document.getElementById('formMetadata').value = seg.metadata || '';
+            document.getElementById('formEmbeddingId').value = seg.embeddingId || '';
+            document.getElementById('formSkipEmbedding').value = seg.skipEmbedding === 1 ? '1' : '';
+            showModal('formModal');
+        } catch (e) {
+            alert('获取片段失败：' + e.message);
+        }
+    }
+
+    // ========== 保存 ==========
+    async function saveSegment() {
+        const id = document.getElementById('formId').value;
+        const documentId = document.getElementById('formDocId').value.trim();
+        const text = document.getElementById('formText').value.trim();
+        const chunkOrder = document.getElementById('formChunkOrder').value;
+
+        if (!documentId) { alert('请输入文档ID'); return; }
+        if (!text) { alert('请输入文本内容'); return; }
+
+        const body = {
+            documentId: Number(documentId),
+            text,
+            chunkOrder: Number(chunkOrder),
+            chunkId: document.getElementById('formChunkId').value.trim() || null,
+            status: document.getElementById('formStatus').value,
+            metadata: document.getElementById('formMetadata').value.trim() || null,
+            embeddingId: document.getElementById('formEmbeddingId').value.trim() || null,
+            skipEmbedding: document.getElementById('formSkipEmbedding').value === '1' ? 1 : null
+        };
+
+        try {
+            const url = id ? BASE_URL : BASE_URL;
+            const method = id ? 'PUT' : 'POST';
+            if (id) body.id = Number(id);
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (res.ok) {
+                closeModal();
+                loadPage(id ? currentPage : 1);
+            } else {
+                alert('保存失败');
+            }
+        } catch (e) {
+            alert('保存异常：' + e.message);
+        }
+    }
+
+    // ========== 删除 ==========
+    async function deleteSegment(id) {
+        if (!confirm('确定要删除该片段吗？')) return;
+        try {
+            const res = await fetch(`${BASE_URL}/${id}`, { method: 'DELETE' });
+            if (res.ok) loadPage(currentPage);
+            else alert('删除失败');
+        } catch (e) {
+            alert('删除异常：' + e.message);
+        }
+    }
+
+    // ========== 批量删除 ==========
+    async function batchDelete() {
+        const ids = [...document.querySelectorAll('.row-check:checked')].map(cb => Number(cb.value));
+        if (!ids.length) { alert('请先选择要删除的片段'); return; }
+        if (!confirm(`确定要删除选中的 ${ids.length} 个片段吗？`)) return;
+        try {
+            const res = await fetch(`${BASE_URL}/batch`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ids)
+            });
+            if (res.ok) loadPage(currentPage);
+            else alert('批量删除失败');
+        } catch (e) {
+            alert('删除异常：' + e.message);
+        }
+    }
+
+    // ========== 查看详情 ==========
+    async function viewDetail(id) {
+        try {
+            const res = await fetch(`${BASE_URL}/${id}`);
+            const seg = await res.json();
+            if (!seg.id) { alert('片段不存在'); return; }
+            document.getElementById('detailContent').innerHTML = `
+                <div class="detail-row"><div class="detail-label">ID</div><div class="detail-value">${seg.id}</div></div>
+                <div class="detail-row"><div class="detail-label">文档ID</div><div class="detail-value"><a href="segment.html?documentId=${seg.documentId}" style="color:#1677ff;">${seg.documentId}</a></div></div>
+                <div class="detail-row"><div class="detail-label">顺序</div><div class="detail-value">${seg.chunkOrder ?? '-'}</div></div>
+                <div class="detail-row"><div class="detail-label">分片ID</div><div class="detail-value">${seg.chunkId || '-'}</div></div>
+                <div class="detail-row"><div class="detail-label">状态</div><div class="detail-value"><span class="status-tag status-${seg.status || ''}">${seg.status || '-'}</span></div></div>
+                <div class="detail-row"><div class="detail-label">嵌入ID</div><div class="detail-value">${seg.embeddingId || '-'}</div></div>
+                <div class="detail-row"><div class="detail-label">跳过嵌入</div><div class="detail-value">${seg.skipEmbedding === 1 ? '是' : '否'}</div></div>
+                <div class="detail-row"><div class="detail-label">元数据</div><div class="detail-value">${escapeHtml(seg.metadata || '-')}</div></div>
+                <div class="detail-row"><div class="detail-label">文本内容</div><div class="detail-value" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;background:#fafafa;padding:12px;border-radius:4px;margin-top:4px;">${escapeHtml(seg.text || '-')}</div></div>
+                <div class="detail-row"><div class="detail-label">创建时间</div><div class="detail-value">${formatDateTime(seg.createdAt)}</div></div>
+                <div class="detail-row"><div class="detail-label">修改时间</div><div class="detail-value">${formatDateTime(seg.updatedAt)}</div></div>
+            `;
+            showModal('detailModal');
+        } catch (e) {
+            alert('获取详情失败：' + e.message);
+        }
+    }
+
+    // ========== 模态框控制 ==========
+    function showModal(id) {
+        document.getElementById('modalOverlay').style.display = 'block';
+        document.getElementById(id).style.display = 'block';
+    }
+    function closeModal() {
+        document.getElementById('modalOverlay').style.display = 'none';
+        document.getElementById('formModal').style.display = 'none';
+    }
+    function closeDetailModal() {
+        document.getElementById('modalOverlay').style.display = 'none';
+        document.getElementById('detailModal').style.display = 'none';
+    }
+
+    // ========== 工具函数 ==========
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+    function truncate(str, len) {
+        if (!str) return '-';
+        return str.length > len ? str.substring(0, len) + '...' : str;
+    }
+    function formatDateTime(dt) {
+        if (!dt) return '-';
+        if (Array.isArray(dt)) {
+            const [y, m, d, h, mi, s] = dt;
+            return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${String(h||0).padStart(2,'0')}:${String(mi||0).padStart(2,'0')}:${String(Math.floor(s||0)).padStart(2,'0')}`;
+        }
+        return String(dt).replace('T', ' ').substring(0, 19);
+    }
+</script>
+</body>
+</html>

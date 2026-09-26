@@ -139,7 +139,18 @@ src/main/java/com/lujia/rag/raglangchain4j/
 
 用 Docker 起 MySQL / Redis / Elasticsearch / MinIO（Neo4j 可选），端口与上表默认值一致即可。
 
-### 2. 初始化表结构
+### 2. 准备重排序模型
+
+重排序用的是本地 ONNX 版 bge-reranker-v2-m3，模型约 570MB，**不随仓库分发**（已写进 `.gitignore`）。clone 之后需要自行准备这两个文件，放进 `src/main/resources/bge/`：
+
+- `model_quantized.onnx` — 量化后的模型权重
+- `tokenizer.json` — 与模型配套的分词器
+
+从 bge-reranker-v2-m3 的官方 ONNX 发布处获取量化版本即可。加载路径在 `OnnxScoringModelHolder` 里写死为 classpath 下的 `/bge`，启动时会解压到临时目录，所以文件名必须完全一致。
+
+缺文件的后果：`contentAggregator` bean 在启动阶段创建，找不到文件会抛 `OnnxScoringModel 初始化失败`，**整个应用起不来**——不是检索时才报错。
+
+### 3. 初始化表结构
 
 ```bash
 mysql -uroot -p < src/main/resources/init.sql
@@ -147,7 +158,7 @@ mysql -uroot -p < src/main/resources/init.sql
 
 脚本建 6 张表：`user_info`、`rag_knowledge_document`、`knowledge_document_segment`、`rag_chat_conversation`、`rag_chat_message`、`feishu_conversation_mapping`。
 
-### 3. 创建 ES 索引（必须手工执行）
+### 4. 创建 ES 索引（必须手工执行）
 
 仓库内**没有**生产索引 mapping，代码也不会自动建索引；索引不存在时检索会失败并降级为空结果。
 
@@ -167,7 +178,7 @@ curl -X PUT http://localhost:9200/rag-documents -H 'Content-Type: application/js
 
 MinIO 桶无需手工创建，应用启动时 `MinioConfig` 会检查并按需创建 `rag-documents`。
 
-### 4. 填写配置
+### 5. 填写配置
 
 编辑 `src/main/resources/application.yml`，把所有占位值替换为真实凭据：`bailian.api-key`、`embedding.api-key`、`mineru.token`、`feishu.*`，以及数据源/Redis/MinIO/Neo4j 的账号密码。
 
@@ -180,7 +191,7 @@ export SPRING_DATASOURCE_PASSWORD=yyyy
 
 同时改掉 Druid 监控页口令（`spring.datasource.druid.stat-view-servlet.login-username/-password`），默认值仅适合本地。
 
-### 5. 启动与验证
+### 6. 启动与验证
 
 ```bash
 mvn spring-boot:run                     # 或 mvn package 后 java -jar target/*.jar
@@ -295,6 +306,8 @@ mvn -o test -Dtest=FullPipelineIntegrationTest   # 只跑全链路集成测试
 - `FullPipelineIntegrationTest`：覆盖上传→向量化→检索问答、权限过滤、状态流转、仅 BM25 命中场景等 7 个用例，每个用例前重建 ES 索引并清空测试库。
 - `ResilientStreamingChatModelTest`：5 个纯单测，验证流式调用熔断按真实结果计数。
 - 测试用 `FakeEmbeddingModel`（8 维确定性向量）替代真实百炼 Embedding，LLM 由 `TestAiConfig` 里的 Mockito bean 提供，因此不消耗 API 额度。
+- 测试**不需要**放置 bge 重排序模型：`TestAiConfig` 用 `@Primary` 直通聚合器覆盖了 `contentAggregator`，不会加载 ONNX，所以 CI 上无需那 570MB 文件也能跑完整测试。
+- 假模型的向量近乎共线，`minScore` 无法用来隔离某一条检索链路；需要构造"仅 BM25 命中"的场景时，靠压小 `maxResults`（超量取回倍数固定为 3）把目标分片挤出向量检索 top-N。
 
 ## 已知限制与常见坑
 
@@ -302,6 +315,6 @@ mvn -o test -Dtest=FullPipelineIntegrationTest   # 只跑全链路集成测试
 - **访客共用限流桶**：访客登录共用同一账号（`visitor_000`），因此落到同一个 `u:` 桶。按访客维度分桶需要先做访客身份改造。
 - **反向代理下的 IP**：`ChatRateLimiter` 只读 `request.getRemoteAddr()`，故意不读 `X-Forwarded-For`（该头可伪造，读了等于送出绕过限流的口子）。走 Nginx 部署时请配置 `server.forward-headers-strategy: framework` 并保证代理层可信。
 - **Neo4j 无数据不影响启动**：图谱检索失败会降级到 ES，但若从未导入图谱，`PRE_SALES` / `PRICE_INQUIRY` 意图等于多绕一次空查询，建议按需关掉该路由分支。
-- **重排序模型随包分发**：`src/main/resources/bge/model_quantized.onnx` 启动时解压到临时目录加载，首次加载有秒级耗时；jar 体积也因此偏大。
+- **重排序模型需自行放置**：ONNX 版 bge-reranker 体积约 570MB，超过 GitHub 单文件限制，已排除在仓库之外（见「准备重排序模型」一节）。放置后首次加载有秒级耗时，`mvn package` 产出的 jar 也会因此增大约 570MB——需要精简部署包时可改为挂载到容器内的 classpath 扩展目录。
 - **Druid 监控页与明文配置**：仓库默认口令仅供本地，务必改口令或在生产环境关闭 `stat-view-servlet`；`application.yml` 里的凭据不应保留真实值。
 - **`/api/test/**` 是联调接口**：可绕过正常流程直接触发向量化与裸检索，生产环境应在网关层屏蔽。

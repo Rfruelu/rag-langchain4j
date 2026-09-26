@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - RAG 智能助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+
+        .login-card { width: 400px; background: #fff; border-radius: 16px; padding: 40px 36px; box-shadow: 0 20px 60px rgba(0,0,0,.15); animation: slideUp .4s ease; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .login-header { text-align: center; margin-bottom: 32px; }
+        .login-logo { width: 52px; height: 52px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; color: #fff; margin-bottom: 16px; box-shadow: 0 8px 24px rgba(102,126,234,.3); }
+        .login-title { font-size: 22px; font-weight: 600; color: #1a1a2e; margin-bottom: 6px; }
+        .login-desc { font-size: 14px; color: #888; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 13px; font-weight: 500; color: #555; margin-bottom: 6px; }
+        .form-input { width: 100%; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 14px; color: #333; outline: none; transition: all .2s; background: #f9fafb; }
+        .form-input:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.1); background: #fff; }
+        .form-input::placeholder { color: #bbb; }
+
+        .login-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; transition: all .2s; margin-top: 8px; }
+        .login-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(102,126,234,.4); }
+        .login-btn:active { transform: translateY(0); }
+        .login-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .visitor-btn { width: 100%; padding: 10px; border: 1px solid #d9d9d9; border-radius: 10px; background: #fff; color: #666; font-size: 14px; cursor: pointer; transition: all .2s; margin-top: 12px; }
+        .visitor-btn:hover { border-color: #667eea; color: #667eea; }
+        .divider { display: flex; align-items: center; margin: 20px 0; color: #ccc; font-size: 12px; }
+        .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid #e5e7eb; }
+        .divider::before { margin-right: 12px; }
+        .divider::after { margin-left: 12px; }
+
+        .error-msg { display: none; padding: 10px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-size: 13px; margin-bottom: 16px; align-items: center; gap: 6px; }
+        .error-msg.show { display: flex; }
+        .error-msg svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+        .login-footer { text-align: center; margin-top: 24px; font-size: 12px; color: #bbb; }
+    </style>
+</head>
+<body>
+
+<div class="login-card">
+    <div class="login-header">
+        <div class="login-logo">R</div>
+        <div class="login-title">RAG 智能助手</div>
+        <div class="login-desc">登录以使用知识库问答功能</div>
+    </div>
+
+    <div class="error-msg" id="errorMsg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span id="errorText"></span>
+    </div>
+
+    <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+            <label class="form-label">手机号</label>
+            <input class="form-input" type="tel" id="phone" placeholder="请输入手机号" autocomplete="tel" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">密码</label>
+            <input class="form-input" type="password" id="password" placeholder="请输入密码" autocomplete="current-password" required>
+        </div>
+        <button class="login-btn" type="submit" id="loginBtn">登 录</button>
+    </form>
+
+    <div class="divider">或</div>
+    <button class="visitor-btn" onclick="handleVisitor()" id="visitorBtn">访客访问</button>
+
+    <div class="login-footer">RAG 智能助手 · 知识库问答系统</div>
+</div>
+
+<script>
+    // 如果已登录，直接跳转
+    (function() {
+        const token = localStorage.getItem('satoken');
+        if (token) {
+            fetch('/api/auth/current', { headers: { 'satoken': token } })
+                .then(res => res.json())
+                .then(data => { if (data.success) window.location.href = '/chat.html'; })
+                .catch(() => {});
+        }
+    })();
+
+    async function handleLogin(e) {
+        e.preventDefault();
+        const phone = document.getElementById('phone').value.trim();
+        const password = document.getElementById('password').value;
+        const btn = document.getElementById('loginBtn');
+        const errorEl = document.getElementById('errorMsg');
+        const errorText = document.getElementById('errorText');
+
+        if (!phone) { showError('请输入手机号'); return; }
+        if (!password) { showError('请输入密码'); return; }
+
+        btn.disabled = true;
+        btn.textContent = '登录中...';
+        errorEl.classList.remove('show');
+
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, password })
+            });
+            const data = await res.json();
+
+            if (data.success && data.token) {
+                // 保存 token
+                localStorage.setItem('satoken', data.token);
+                // 保存用户信息
+                if (data.user) {
+                    localStorage.setItem('userInfo', JSON.stringify(data.user));
+                }
+                // 跳转到聊天页面
+                window.location.href = '/chat.html';
+            } else {
+                showError(data.message || '登录失败');
+            }
+        } catch (err) {
+            showError('网络异常，请稍后重试');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '登 录';
+        }
+    }
+
+    function showError(msg) {
+        const errorEl = document.getElementById('errorMsg');
+        const errorText = document.getElementById('errorText');
+        errorText.textContent = msg;
+        errorEl.classList.add('show');
+    }
+
+    async function handleVisitor() {
+        const btn = document.getElementById('visitorBtn');
+        const errorEl = document.getElementById('errorMsg');
+        btn.disabled = true;
+        btn.textContent = '正在进入...';
+        errorEl.classList.remove('show');
+
+        try {
+            const res = await fetch('/api/auth/visitor', { method: 'POST' });
+            const data = await res.json();
+
+            if (data.success && data.token) {
+                localStorage.setItem('satoken', data.token);
+                if (data.user) {
+                    localStorage.setItem('userInfo', JSON.stringify(data.user));
+                }
+                window.location.href = '/chat.html';
+            } else {
+                showError(data.message || '访客登录失败');
+            }
+        } catch (err) {
+            showError('网络异常，请稍后重试');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '访客访问';
+        }
+    }
+</script>
+</body>
+</html>
