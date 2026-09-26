@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 智能对话</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; height: 100vh; overflow: hidden; display: flex; background: #f7f8fa; }
+
+        /* ========== 侧边栏 ========== */
+        .sidebar { width: 260px; background: #1a1a2e; color: #fff; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 20px 16px 12px; }
+        .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .brand-logo { width: 32px; height: 32px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #fff; }
+        .brand-name { font-size: 18px; font-weight: 600; background: linear-gradient(135deg, #667eea, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .new-chat-btn { width: 100%; padding: 10px 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all .2s; }
+        .new-chat-btn:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.2); }
+        .new-chat-btn .icon { font-size: 18px; }
+
+        .conversation-list { flex: 1; overflow-y: auto; padding: 8px; }
+        .conversation-list::-webkit-scrollbar { width: 4px; }
+        .conversation-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
+        .conv-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 2px; transition: all .15s; display: flex; justify-content: space-between; align-items: center; }
+        .conv-item:hover { background: rgba(255,255,255,.08); }
+        .conv-item.active { background: rgba(102,126,234,.25); }
+        .conv-item .conv-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; color: rgba(255,255,255,.85); }
+        .conv-item .conv-delete { opacity: 0; font-size: 14px; color: rgba(255,255,255,.4); cursor: pointer; padding: 2px 4px; border-radius: 4px; transition: all .15s; flex-shrink: 0; }
+        .conv-item:hover .conv-delete { opacity: 1; }
+        .conv-item .conv-delete:hover { color: #ff6b6b; background: rgba(255,107,107,.1); }
+
+        .sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.08); }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #fff; }
+        .user-name { font-size: 13px; color: rgba(255,255,255,.7); flex: 1; }
+        .logout-btn { background: none; border: none; color: rgba(255,255,255,.4); cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 4px; transition: all .15s; }
+        .logout-btn:hover { color: #ff6b6b; background: rgba(255,107,107,.1); }
+
+        /* ========== 主区域 ========== */
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .chat-header { padding: 16px 24px; background: #fff; border-bottom: 1px solid #eef0f3; display: flex; align-items: center; justify-content: space-between; }
+        .chat-header-title { font-size: 15px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-header-actions { display: flex; gap: 8px; }
+        .header-btn { padding: 6px 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #666; font-size: 13px; cursor: pointer; transition: all .15s; }
+        .header-btn:hover { border-color: #667eea; color: #667eea; }
+
+        /* ========== 消息区域 ========== */
+        .messages-area { flex: 1; overflow-y: auto; padding: 24px 0; }
+        .messages-area::-webkit-scrollbar { width: 6px; }
+        .messages-area::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+        .messages-container { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+
+        /* 欢迎页 */
+        .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 40px; }
+        .welcome-logo { width: 56px; height: 56px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff; margin-bottom: 20px; box-shadow: 0 8px 24px rgba(102,126,234,.3); }
+        .welcome-title { font-size: 24px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px; }
+        .welcome-desc { font-size: 14px; color: #888; margin-bottom: 32px; }
+        .suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 560px; width: 100%; }
+        .suggestion-card { padding: 14px 16px; background: #fff; border: 1px solid #eef0f3; border-radius: 12px; cursor: pointer; text-align: left; font-size: 13px; color: #555; transition: all .2s; line-height: 1.5; }
+        .suggestion-card:hover { border-color: #667eea; box-shadow: 0 2px 12px rgba(102,126,234,.12); transform: translateY(-1px); }
+
+        /* 消息气泡 */
+        .message { display: flex; gap: 12px; margin-bottom: 24px; animation: fadeIn .3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .message.user { flex-direction: row-reverse; }
+        .msg-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #fff; flex-shrink: 0; }
+        .message.assistant .msg-avatar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .message.user .msg-avatar { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .msg-content { max-width: 70%; }
+        .msg-bubble { padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.7; word-break: break-word; }
+        .message.assistant .msg-bubble { background: #fff; color: #333; border: 1px solid #eef0f3; border-top-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+        .message.user .msg-bubble { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-top-right-radius: 4px; box-shadow: 0 2px 8px rgba(102,126,234,.25); white-space: pre-wrap; }
+
+        /* Markdown 渲染样式（仅 assistant 消息） */
+        .msg-bubble p { margin: 0 0 8px; }
+        .msg-bubble p:last-child { margin-bottom: 0; }
+        .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 { margin: 12px 0 6px; font-weight: 600; line-height: 1.4; }
+        .msg-bubble h1 { font-size: 18px; }
+        .msg-bubble h2 { font-size: 16px; }
+        .msg-bubble h3 { font-size: 15px; }
+        .msg-bubble strong { font-weight: 600; }
+        .msg-bubble em { font-style: italic; }
+        .msg-bubble ul, .msg-bubble ol { margin: 4px 0 8px; padding-left: 22px; }
+        .msg-bubble li { margin: 2px 0; }
+        .msg-bubble code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; font-family: 'Consolas', 'Monaco', monospace; color: #d63384; }
+        .msg-bubble pre { background: #1e1e2e; color: #cdd6f4; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-size: 13px; line-height: 1.5; }
+        .msg-bubble pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+        .msg-bubble blockquote { border-left: 3px solid #667eea; padding: 4px 12px; margin: 8px 0; color: #666; background: #f8f9ff; border-radius: 0 4px 4px 0; }
+        .msg-bubble hr { border: none; border-top: 1px solid #e5e7eb; margin: 12px 0; }
+        .msg-bubble a { color: #667eea; text-decoration: none; }
+        .msg-bubble a:hover { text-decoration: underline; }
+        .msg-bubble img { max-width: 100%; border-radius: 8px; margin: 8px 0; cursor: pointer; transition: transform .2s; }
+        .msg-bubble img:hover { transform: scale(1.02); }
+        .msg-time { font-size: 11px; color: #aaa; margin-top: 4px; padding: 0 4px; }
+        .message.user .msg-time { text-align: right; }
+
+        /* 流式输出光标 */
+        .streaming-cursor::after { content: '\2588'; animation: blink 1s step-end infinite; color: #667eea; margin-left: 2px; }
+        @keyframes blink { 50% { opacity: 0; } }
+        /* 流式输出时隐藏末尾未闭合的 Markdown 语法 */
+        .md-incomplete { visibility: hidden; font-size: 0; }
+
+        /* 加载指示器 */
+        .typing-indicator { display: flex; gap: 4px; padding: 8px 0; }
+        .typing-indicator span { width: 8px; height: 8px; background: #667eea; border-radius: 50%; animation: bounce .6s infinite alternate; }
+        .typing-indicator span:nth-child(2) { animation-delay: .2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: .4s; }
+        @keyframes bounce { to { opacity: .3; transform: translateY(-4px); } }
+
+        /* RAG 处理流程进度条 */
+        .rag-progress { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.05); animation: fadeIn .3s ease; }
+        .rag-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .rag-progress-title { font-size: 13px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 6px; }
+        .rag-progress-title .spinner { width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: rag-spin .8s linear infinite; }
+        @keyframes rag-spin { to { transform: rotate(360deg); } }
+        .rag-progress-pct { font-size: 12px; color: #667eea; font-weight: 600; }
+        .rag-progress-track { height: 6px; background: #f0f1f3; border-radius: 3px; overflow: hidden; }
+        .rag-progress-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 3px; transition: width .5s ease; }
+        .rag-progress-desc { font-size: 12px; color: #999; margin-top: 6px; }
+        .rag-progress-steps { display: flex; justify-content: space-between; margin-top: 10px; }
+        .rag-step { font-size: 11px; color: #bbb; display: flex; align-items: center; gap: 3px; transition: color .3s; }
+        .rag-step.done { color: #667eea; }
+        .rag-step.active { color: #667eea; font-weight: 600; }
+        .rag-step-dot { width: 6px; height: 6px; border-radius: 50%; background: #ddd; transition: background .3s; }
+        .rag-step.done .rag-step-dot { background: #667eea; }
+        .rag-step.active .rag-step-dot { background: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.2); }
+
+        /* RAG 引用文档（飞书风格） */
+        .rag-references { margin-top: 10px; border: 1px solid #e8e8ec; border-radius: 10px; overflow: hidden; background: #fff; }
+        .rag-references-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; user-select: none; transition: background .15s; }
+        .rag-references-header:hover { background: #f7f8fa; }
+        .rag-references-title { font-size: 13px; color: #666; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+        .rag-references-title svg { width: 16px; height: 16px; color: #8b8fa3; }
+        .rag-references-toggle { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: #bbb; transition: transform .25s ease; }
+        .rag-references-toggle svg { width: 14px; height: 14px; }
+        .rag-references.collapsed .rag-references-toggle { transform: rotate(-90deg); }
+        .rag-references.collapsed .rag-ref-list { display: none; }
+        .rag-ref-list { display: flex; flex-direction: column; gap: 0; border-top: 1px solid #f0f0f3; }
+        .rag-ref-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; text-decoration: none; color: inherit; transition: background .15s; border-bottom: 1px solid #f5f5f7; }
+        .rag-ref-item:last-child { border-bottom: none; }
+        .rag-ref-item:hover { background: #f7f8fa; }
+        .rag-ref-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .rag-ref-icon.type-pdf { background: #fef2f2; }
+        .rag-ref-icon.type-doc { background: #eff6ff; }
+        .rag-ref-icon.type-xls { background: #f0fdf4; }
+        .rag-ref-icon.type-ppt { background: #fff7ed; }
+        .rag-ref-icon.type-img { background: #fdf4ff; }
+        .rag-ref-icon.type-default { background: #f5f5f7; }
+        .rag-ref-body { flex: 1; min-width: 0; }
+        .rag-ref-name { font-size: 13px; color: #1f2329; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 1.4; }
+        .rag-ref-meta { font-size: 11px; color: #8b8fa3; margin-top: 2px; display: flex; align-items: center; gap: 8px; }
+        .rag-ref-score { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #8b8fa3; flex-shrink: 0; }
+        .rag-ref-score-bar { width: 36px; height: 4px; background: #f0f0f3; border-radius: 2px; overflow: hidden; }
+        .rag-ref-score-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #667eea, #764ba2); }
+        .rag-ref-arrow { color: #ccc; flex-shrink: 0; transition: color .15s; }
+        .rag-ref-item:hover .rag-ref-arrow { color: #667eea; }
+        .rag-ref-arrow svg { width: 14px; height: 14px; }
+
+        /* ========== 输入区域 ========== */
+        .input-area { padding: 16px 24px 24px; background: #fff; border-top: 1px solid #eef0f3; }
+        .input-container { max-width: 800px; margin: 0 auto; position: relative; }
+        .input-box { display: flex; align-items: flex-end; background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 16px; padding: 8px 12px; transition: all .2s; }
+        .input-box:focus-within { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.1); background: #fff; }
+        .input-box textarea { flex: 1; border: none; outline: none; background: transparent; resize: none; font-size: 14px; line-height: 1.6; max-height: 120px; min-height: 24px; font-family: inherit; color: #333; padding: 4px 0; }
+        .input-box textarea::placeholder { color: #aaa; }
+        .send-btn { width: 36px; height: 36px; border: none; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; flex-shrink: 0; }
+        .send-btn:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(102,126,234,.4); }
+        .send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+        .send-btn svg { width: 18px; height: 18px; }
+        .input-tip { text-align: center; font-size: 12px; color: #bbb; margin-top: 8px; }
+    </style>
+</head>
+<body>
+
+<!-- 侧边栏 -->
+<div class="sidebar">
+    <div class="sidebar-header">
+        <div class="brand">
+            <div class="brand-logo">R</div>
+            <div class="brand-name">RAG 智能助手</div>
+        </div>
+        <button class="new-chat-btn" onclick="createNewConversation()">
+            <span class="icon">+</span>
+            <span>新建对话</span>
+        </button>
+    </div>
+    <div class="conversation-list" id="conversationList"></div>
+    <div class="sidebar-footer">
+        <div class="user-info">
+            <div class="user-avatar">U</div>
+            <div class="user-name">用户</div>
+            <button class="logout-btn" onclick="handleLogout()" title="退出登录">&#x2192;</button>
+        </div>
+    </div>
+</div>
+
+<!-- 主区域 -->
+<div class="main">
+    <div class="chat-header" id="chatHeader">
+        <div class="chat-header-title" id="chatTitle">新对话</div>
+        <div class="chat-header-actions">
+            <button class="header-btn" onclick="refreshMessages()">刷新</button>
+        </div>
+    </div>
+
+    <div class="messages-area" id="messagesArea">
+        <div class="messages-container" id="messagesContainer">
+            <!-- 欢迎页或消息列表 -->
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-container">
+            <div class="input-box">
+                <textarea id="messageInput" rows="1" placeholder="输入消息，Enter 发送，Shift+Enter 换行..."
+                    onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+            <div class="input-tip">RAG 智能助手基于知识库检索增强生成，回答仅供参考</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '/api/chat';
+    const AUTH_API = '/api/auth';
+
+    let currentConversationId = null;
+    let isLoading = false;
+    let currentUser = null;
+
+    // ========== 登录检查 ==========
+    function getToken() {
+        return localStorage.getItem('satoken');
+    }
+
+    function redirectToLogin() {
+        localStorage.removeItem('satoken');
+        localStorage.removeItem('userInfo');
+        window.location.href = '/login.html';
+    }
+
+    /** 带 Token 的 fetch 封装，自动处理 401 跳转 */
+    async function authFetch(url, options = {}) {
+        const token = getToken();
+        if (!token) { redirectToLogin(); throw new Error('未登录'); }
+        if (!options.headers) options.headers = {};
+        options.headers['satoken'] = token;
+        const res = await fetch(url, options);
+        if (res.status === 401) { redirectToLogin(); throw new Error('登录已过期'); }
+        return res;
+    }
+
+    // ========== 初始化 ==========
+    async function init() {
+        // 检查登录状态
+        const token = getToken();
+        if (!token) { redirectToLogin(); return; }
+        try {
+            const res = await authFetch(`${AUTH_API}/current`);
+            const data = await res.json();
+            if (data.success && data.data) {
+                currentUser = data.data;
+                // 更新侧边栏用户信息
+                const nameEl = document.querySelector('.user-name');
+                const avatarEl = document.querySelector('.user-avatar');
+                if (nameEl) nameEl.textContent = currentUser.nickname || currentUser.name || '用户';
+                if (avatarEl) avatarEl.textContent = (currentUser.nickname || currentUser.name || 'U').charAt(0);
+            } else {
+                redirectToLogin(); return;
+            }
+        } catch (e) {
+            redirectToLogin(); return;
+        }
+        await loadConversations();
+        showWelcome();
+    }
+
+    // ========== 退出登录 ==========
+    async function handleLogout() {
+        if (!confirm('确定退出登录？')) return;
+        try {
+            const token = getToken();
+            if (token) {
+                await fetch('/api/auth/logout', { method: 'POST', headers: { 'satoken': token } });
+            }
+        } catch (e) { /* 忽略异常 */ }
+        redirectToLogin();
+    }
+
+    // ========== 会话管理 ==========
+    async function loadConversations() {
+        try {
+            const res = await authFetch(`${API_BASE}/conversations?userId=${currentUser?.id || ''}`);
+            const data = await res.json();
+            if (data.success) {
+                renderConversationList(data.data);
+            }
+        } catch (e) {
+            console.error('加载会话列表失败:', e);
+        }
+    }
+
+    function renderConversationList(conversations) {
+        const list = document.getElementById('conversationList');
+        if (!conversations || conversations.length === 0) {
+            list.innerHTML = '<div style="text-align:center;padding:24px;color:rgba(255,255,255,.3);font-size:13px;">暂无对话记录</div>';
+            return;
+        }
+        list.innerHTML = conversations.map(conv => `
+            <div class="conv-item ${conv.conversationId === currentConversationId ? 'active' : ''}"
+                 onclick="selectConversation('${conv.conversationId}')">
+                <span class="conv-title">${escapeHtml(conv.title)}</span>
+                <span class="conv-delete" onclick="event.stopPropagation();deleteConversation('${conv.conversationId}')" title="删除">&#128465;</span>
+            </div>
+        `).join('');
+    }
+
+    async function createNewConversation() {
+        try {
+            const res = await authFetch(`${API_BASE}/conversations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUser?.id || '' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                currentConversationId = data.data.conversationId;
+                document.getElementById('chatTitle').textContent = data.data.title;
+                await loadConversations();
+                showWelcome();
+                document.getElementById('messageInput').focus();
+            }
+        } catch (e) {
+            console.error('创建会话失败:', e);
+        }
+    }
+
+    async function selectConversation(conversationId) {
+        currentConversationId = conversationId;
+        await loadConversations();
+        await loadMessages(conversationId);
+    }
+
+    async function deleteConversation(conversationId) {
+        if (!confirm('确定删除该对话？')) return;
+        try {
+            const res = await authFetch(`${API_BASE}/conversations/${conversationId}`, { method: 'DELETE' });
+            if (!res.ok) {
+                console.error('删除请求失败:', res.status, res.statusText);
+                alert('删除失败，服务器返回 ' + res.status);
+                return;
+            }
+            if (currentConversationId === conversationId) {
+                currentConversationId = null;
+                showWelcome();
+                document.getElementById('chatTitle').textContent = '新对话';
+            }
+            await loadConversations();
+        } catch (e) {
+            console.error('删除会话异常:', e);
+            alert('删除失败: ' + e.message);
+        }
+    }
+
+    // ========== 消息管理 ==========
+    async function loadMessages(conversationId) {
+        try {
+            const res = await authFetch(`${API_BASE}/conversations/${conversationId}/messages`);
+            const data = await res.json();
+            if (data.success) {
+                renderMessages(data.data);
+            }
+        } catch (e) {
+            console.error('加载消息失败:', e);
+        }
+    }
+
+    function renderMessages(messages) {
+        const container = document.getElementById('messagesContainer');
+        if (!messages || messages.length === 0) {
+            showWelcome();
+            return;
+        }
+        container.innerHTML = messages.map(msg => createMessageHtml(msg)).join('');
+        scrollToBottom();
+    }
+
+    function createMessageHtml(msg) {
+        const isUser = msg.type === 'USER';
+        const avatar = isUser ? 'U' : 'R';
+        const time = formatTime(msg.createdTime);
+        const contentHtml = isUser ? escapeHtml(msg.content) : renderMarkdown(msg.content);
+        let referencesHtml = '';
+        if (!isUser && msg.ragReferences) {
+            try {
+                const refs = JSON.parse(msg.ragReferences);
+                if (refs && refs.length > 0) {
+                    referencesHtml = renderRagReferences(refs);
+                }
+            } catch(e) { /* 解析失败不展示 */ }
+        }
+        return `
+            <div class="message ${isUser ? 'user' : 'assistant'}">
+                <div class="msg-avatar">${avatar}</div>
+                <div class="msg-content">
+                    <div class="msg-bubble">${contentHtml}</div>
+                    ${referencesHtml}
+                    <div class="msg-time">${time}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function sendMessage() {
+        if (isLoading) return;
+        const input = document.getElementById('messageInput');
+        const content = input.value.trim();
+        if (!content) return;
+
+        // 如果没有当前会话，先创建
+        if (!currentConversationId) {
+            await createNewConversation();
+        }
+
+        // 显示用户消息
+        const container = document.getElementById('messagesContainer');
+        const welcome = container.querySelector('.welcome');
+        if (welcome) welcome.remove();
+
+        const userMsgHtml = `
+            <div class="message user">
+                <div class="msg-avatar">U</div>
+                <div class="msg-content">
+                    <div class="msg-bubble">${escapeHtml(content)}</div>
+                    <div class="msg-time">刚刚</div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', userMsgHtml);
+
+        // 创建AI回复气泡（流式填充）
+        const assistantMsgId = 'streaming-msg-' + Date.now();
+        const assistantHtml = `
+            <div class="message assistant" id="${assistantMsgId}">
+                <div class="msg-avatar">R</div>
+                <div class="msg-content">
+                    <div class="msg-bubble" id="${assistantMsgId}-bubble"></div>
+                    <div class="msg-time">刚刚</div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', assistantHtml);
+        scrollToBottom();
+
+        // 清空输入框
+        input.value = '';
+        autoResize(input);
+        isLoading = true;
+        document.getElementById('sendBtn').disabled = true;
+
+        const bubble = document.getElementById(`${assistantMsgId}-bubble`);
+        bubble.classList.add('streaming-cursor');
+        let fullText = '';
+        let ragReferencesData = null;
+
+        // 创建 RAG 处理流程进度条
+        const ragProgressId = 'rag-progress-' + Date.now();
+        const progressHtml = '<div class="rag-progress" id="' + ragProgressId + '" style="display:none;">' +
+            '<div class="rag-progress-header"><div class="rag-progress-title"><span class="spinner"></span><span class="rag-title">处理中...</span></div><div class="rag-progress-pct">0%</div></div>' +
+            '<div class="rag-progress-track"><div class="rag-progress-fill" style="width:0%"></div></div>' +
+            '<div class="rag-progress-desc"></div>' +
+            '<div class="rag-progress-steps">' +
+            '<span class="rag-step" data-step="1"><span class="rag-step-dot"></span>查询改写</span>' +
+            '<span class="rag-step" data-step="2"><span class="rag-step-dot"></span>意图识别</span>' +
+            '<span class="rag-step" data-step="3"><span class="rag-step-dot"></span>知识检索</span>' +
+            '<span class="rag-step" data-step="4"><span class="rag-step-dot"></span>生成回答</span>' +
+            '</div></div>';
+        const msgContent = document.querySelector('#' + assistantMsgId + ' .msg-content');
+        msgContent.insertAdjacentHTML('beforebegin', progressHtml);
+        const ragProgressEl = document.getElementById(ragProgressId);
+
+        try {
+            const streamToken = getToken();
+            if (!streamToken) { redirectToLogin(); return; }
+            const res = await fetch(`${API_BASE}/conversations/${currentConversationId}/messages/stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'satoken': streamToken },
+                body: JSON.stringify({ content })
+            });
+
+            // 401 未登录，跳转登录页
+            if (res.status === 401) { redirectToLogin(); return; }
+
+            // 检查 HTTP 响应状态
+            if (!res.ok) {
+                throw new Error('服务器响应异常: ' + res.status);
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            // 提取 SSE 事件处理逻辑为函数，供循环内和流结束后复用
+            function processSseEvent(eventText) {
+                if (!eventText.trim()) return;
+
+                let eventName = '';
+                let eventData = '';
+
+                for (const line of eventText.split('\n')) {
+                    if (line.startsWith('event:')) {
+                        eventName = line.substring(6).trim();
+                    } else if (line.startsWith('data:')) {
+                        // 不使用 trim()，避免丢失空白内容；仅去除开头一个可选空格（SSE 规范）
+                        const raw = line.substring(5);
+                        const val = raw.startsWith(' ') ? raw.substring(1) : raw;
+                        // 多行 data: 拼接（SSE 规范：同一事件内多个 data: 行用换行连接）
+                        eventData = eventData ? eventData + '\n' + val : val;
+                    }
+                }
+
+                // 跳过 [DONE] 流结束标记（trimStart 兼容旧版后端可能带前导换行）
+                const trimmedData = eventData.trimStart();
+                if (trimmedData.startsWith('[DONE]')) {
+                    return;
+                }
+
+                // 检查是否为 RAG 管道状态事件
+                if (trimmedData.startsWith('[RAG_STATUS]')) {
+                    try {
+                        const statusData = JSON.parse(trimmedData.substring(12));
+                        updateRagProgress(ragProgressEl, statusData);
+                    } catch(e) { console.debug('RAG 状态解析失败:', e); }
+                    return;
+                }
+
+                // 检查是否为 RAG 引用文档事件
+                if (trimmedData.startsWith('[RAG_REFERENCES]')) {
+                    try {
+                        ragReferencesData = JSON.parse(trimmedData.substring(16));
+                    } catch(e) { console.debug('RAG 引用解析失败:', e); }
+                    return;
+                }
+
+                // Spring WebFlux 发送 Flux<String> 时不带 event: 行，eventName 为空字符串（SSE 规范默认为 message）
+                if ((eventName === 'message' || eventName === '') && eventData !== '') {
+                    // 逐字/逐行追加并渲染 Markdown（处理未闭合语法）
+                    fullText += eventData;
+                    const splitPos = findIncompleteMarkdownSplit(fullText);
+                    if (splitPos >= 0) {
+                        const completeHtml = renderMarkdown(fullText.substring(0, splitPos));
+                        bubble.innerHTML = completeHtml + '<span class="md-incomplete">' + escapeHtml(fullText.substring(splitPos)) + '</span>';
+                    } else {
+                        bubble.innerHTML = renderMarkdown(fullText);
+                    }
+                    scrollToBottom();
+                } else if ((eventName === 'message' || eventName === '') && eventData === '') {
+                    // 空 data 行是后端发送的换行标记，还原为 \n
+                    fullText += '\n';
+                    bubble.innerHTML = renderMarkdown(fullText);
+                    scrollToBottom();
+                } else if (eventName === 'done') {
+                    // 流式输出完成
+                    try {
+                        const meta = JSON.parse(eventData);
+                        // 更新标题
+                        const titleText = fullText.substring(0, 30).replace(/\n/g, ' ');
+                        if (titleText) {
+                            document.getElementById('chatTitle').textContent = titleText || '新对话';
+                        }
+                    } catch(e) { /* 元数据解析失败不影响显示 */ }
+                }
+            }
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // 解析 SSE 事件（以双换行分隔）
+                const events = buffer.split('\n\n');
+                buffer = events.pop(); // 最后一个可能不完整，留待下次
+
+                for (const eventText of events) {
+                    processSseEvent(eventText);
+                }
+            }
+
+            // 流结束后，处理 buffer 中剩余的数据（防止最后一个事件因缺少 \n\n 分隔符而丢失）
+            if (buffer.trim()) {
+                console.debug('SSE 流结束，处理剩余 buffer:', buffer.substring(0, 200));
+                processSseEvent(buffer);
+            }
+
+            // 隐藏 RAG 进度条
+            if (ragProgressEl) ragProgressEl.style.display = 'none';
+
+            // 流式完成，最终完整渲染（移除未闭合标记）
+            bubble.innerHTML = renderMarkdown(fullText);
+            bubble.classList.remove('streaming-cursor');
+
+            // 渲染引用文档
+            if (ragReferencesData && ragReferencesData.length > 0) {
+                msgContent.insertAdjacentHTML('afterend', renderRagReferences(ragReferencesData));
+            }
+
+            // 如果气泡为空（异常情况），显示错误提示
+            if (!fullText) {
+                bubble.textContent = 'AI 回复为空，请重试';
+                bubble.style.color = '#ff6b6b';
+            }
+        } catch (e) {
+            // 隐藏 RAG 进度条
+            if (ragProgressEl) ragProgressEl.style.display = 'none';
+            bubble.classList.remove('streaming-cursor');
+            if (!fullText) {
+                bubble.textContent = '网络异常，请稍后重试';
+                bubble.style.color = '#ff6b6b';
+            }
+            console.error('流式接收异常:', e);
+        } finally {
+            isLoading = false;
+            document.getElementById('sendBtn').disabled = false;
+            scrollToBottom();
+            await loadConversations();
+        }
+    }
+
+    async function refreshMessages() {
+        if (currentConversationId) {
+            await loadMessages(currentConversationId);
+        }
+    }
+
+    // ========== 欢迎页 ==========
+    function showWelcome() {
+        const container = document.getElementById('messagesContainer');
+        container.innerHTML = `
+            <div class="welcome">
+                <div class="welcome-logo">R</div>
+                <div class="welcome-title">RAG 智能助手</div>
+                <div class="welcome-desc">基于知识库检索增强生成，可以帮你解答各种问题</div>
+                <div class="suggestions">
+                    <div class="suggestion-card" onclick="quickSend('你好，请介绍一下你自己')">你好，请介绍一下你自己</div>
+                    <div class="suggestion-card" onclick="quickSend('什么是 RAG？请详细解释')">什么是 RAG？请详细解释</div>
+                    <div class="suggestion-card" onclick="quickSend('你有哪些功能？')">你有哪些功能？</div>
+                    <div class="suggestion-card" onclick="quickSend('如何上传文档到知识库？')">如何上传文档到知识库？</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function quickSend(text) {
+        document.getElementById('messageInput').value = text;
+        sendMessage();
+    }
+
+    // ========== Markdown 渲染 ==========
+
+    /**
+     * 检测流式文本末尾未闭合的 Markdown 语法
+     * @returns 未闭合部分的起始位置，-1 表示全部已闭合
+     */
+    function findIncompleteMarkdownSplit(text) {
+        if (!text) return -1;
+        const escaped = escapeHtml(text);
+
+        // 1. 检查未闭合的代码块（```）
+        const cbMatches = [...escaped.matchAll(/```/g)];
+        if (cbMatches.length % 2 !== 0) {
+            return cbMatches[cbMatches.length - 1].index;
+        }
+
+        // 只检查最后一行（当前正在输入的行）
+        const lastNlIdx = escaped.lastIndexOf('\n');
+        const lastLine = lastNlIdx >= 0 ? escaped.substring(lastNlIdx + 1) : escaped;
+        const lineStart = lastNlIdx + 1; // +1 because lastNlIdx is -1 or index of \n
+
+        // 2. 检查未闭合的行内代码（`）
+        const backticks = [...lastLine.matchAll(/`/g)];
+        if (backticks.length % 2 !== 0) {
+            return lineStart + backticks[backticks.length - 1].index;
+        }
+
+        // 3. 检查未闭合的粗体（**）—— 优先于斜体检查
+        const dblStars = [...lastLine.matchAll(/\*\*/g)];
+        if (dblStars.length > 0 && dblStars.length % 2 !== 0) {
+            return lineStart + dblStars[dblStars.length - 1].index;
+        }
+
+        // 4. 检查未闭合的斜体（*），排除已在粗体中匹配的情况
+        if (dblStars.length === 0 || dblStars.length % 2 === 0) {
+            const sglStars = [...lastLine.matchAll(/\*(?![\s*])/g)];
+            if (sglStars.length % 2 !== 0) {
+                return lineStart + sglStars[sglStars.length - 1].index;
+            }
+        }
+
+        return -1;
+    }
+
+    function renderMarkdown(text) {
+        if (!text) return '';
+        // 先转义 HTML 防止 XSS
+        let html = escapeHtml(text);
+
+        // 图片（![alt](url)）—— 在代码块之前处理，避免内部被破坏
+        // 注意：escapeHtml 会将 & 转义为 &amp;，需要还原 URL 中的查询参数
+        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function(_, alt, url) {
+            // 还原被 escapeHtml 转义的 URL 字符
+            url = url.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+            return '<img src="' + url + '" alt="' + alt + '" loading="lazy" onclick="window.open(this.src)" />';
+        });
+
+        // 代码块（```...```）—— 最先处理，避免内部被其他规则破坏
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+            return '<pre><code>' + code.trim() + '</code></pre>';
+        });
+
+        // 行内代码（`...`）
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // 标题（### / ## / #）
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+        // 粗体（**text**）
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+        // 斜体（*text*）
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+        // 引用（> text）
+        html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+        // 无序列表（- item 或 * item）
+        html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+        // 有序列表（1. item）
+        html = html.replace(/^\d+\. (.+)$/gm, '<oli>$1</oli>');
+        html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, function(match) {
+            return '<ol>' + match.replace(/<\/oli>/g, '</li>').replace(/<oli>/g, '<li>') + '</ol>';
+        });
+
+        // 分隔线（---）
+        html = html.replace(/^---$/gm, '<hr>');
+
+        // 段落：将连续的非标签行包裹为 <p>
+        html = html.replace(/^(?!<[a-z/])((?!<).+)$/gm, '<p>$1</p>');
+        // 清理空行
+        html = html.replace(/<p>\s*<\/p>/g, '');
+
+        return html;
+    }
+
+    // ========== 工具函数 ==========
+    function handleKeyDown(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendMessage();
+        }
+    }
+
+    function autoResize(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    }
+
+    function scrollToBottom() {
+        const area = document.getElementById('messagesArea');
+        setTimeout(() => { area.scrollTop = area.scrollHeight; }, 50);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function formatTime(dt) {
+        if (!dt) return '';
+        if (Array.isArray(dt)) {
+            const [y, m, d, h, mi, s] = dt;
+            return `${String(h||0).padStart(2,'0')}:${String(mi||0).padStart(2,'0')}`;
+        }
+        const str = String(dt);
+        if (str.includes('T')) return str.substring(11, 16);
+        return str.substring(0, 16);
+    }
+
+    // ========== RAG 进度条 ==========
+    function updateRagProgress(el, data) {
+        if (!el || !data) return;
+        el.style.display = 'block';
+        const progress = data.progress || 0;
+        const title = data.title || '';
+        const desc = data.description || '';
+        const step = data.step || 0;
+        el.querySelector('.rag-progress-pct').textContent = progress + '%';
+        el.querySelector('.rag-progress-fill').style.width = progress + '%';
+        el.querySelector('.rag-title').textContent = title;
+        const descEl = el.querySelector('.rag-progress-desc');
+        descEl.textContent = desc || '';
+        descEl.style.display = desc ? 'block' : 'none';
+        el.querySelectorAll('.rag-step').forEach(function(s) {
+            const sStep = parseInt(s.getAttribute('data-step'));
+            s.classList.remove('done', 'active');
+            if (sStep < step) s.classList.add('done');
+            else if (sStep === step) s.classList.add('active');
+        });
+        scrollToBottom();
+    }
+
+    // ========== RAG 引用文档（飞书风格） ==========
+    function renderRagReferences(refs) {
+        if (!refs || refs.length === 0) return '';
+        let itemsHtml = refs.map(function(ref, idx) {
+            const title = ref.documentTitle || '未知文档';
+            const url = ref.fileUrl || '#';
+            const score = ref.score ? ref.score : 0;
+            const scorePct = (score * 100).toFixed(0);
+            const chunkContent = ref.chunkContent || '';
+            const ext = title.split('.').pop().toLowerCase();
+            let icon = '📄', typeClass = 'type-default';
+            if (['pdf'].includes(ext)) { icon = '📕'; typeClass = 'type-pdf'; }
+            else if (['docx','doc'].includes(ext)) { icon = '📘'; typeClass = 'type-doc'; }
+            else if (['xlsx','xls','csv'].includes(ext)) { icon = '📗'; typeClass = 'type-xls'; }
+            else if (['pptx','ppt'].includes(ext)) { icon = '📙'; typeClass = 'type-ppt'; }
+            else if (['png','jpg','jpeg'].includes(ext)) { icon = '🖼️'; typeClass = 'type-img'; }
+            const source = ref.retrievalSource || '';
+            const metaParts = [];
+            if (source) metaParts.push(source);
+            if (ref.chunkId) metaParts.push('片段 ' + (idx + 1));
+            return `<a class="rag-ref-item" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(title)}">
+                <div class="rag-ref-icon ${typeClass}">${icon}</div>
+                <div class="rag-ref-body">
+                    <span class="rag-ref-name">${escapeHtml(title)}</span>
+                    <div class="rag-ref-meta">
+                        ${metaParts.length > 0 ? '<span>' + metaParts.join(' · ') + '</span>' : ''}
+                    </div>
+                </div>
+                ${score > 0 ? `<div class="rag-ref-score">
+                    <div class="rag-ref-score-bar"><div class="rag-ref-score-fill" style="width:${scorePct}%"></div></div>
+                    <span>${scorePct}%</span>
+                </div>` : ''}
+                <div class="rag-ref-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+            </a>`;
+        }).join('');
+        return `<div class="rag-references">
+            <div class="rag-references-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <div class="rag-references-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    引用文档 (${refs.length})
+                </div>
+                <div class="rag-references-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+            </div>
+            <div class="rag-ref-list">${itemsHtml}</div>
+        </div>`;
+    }
+
+    // 启动
+    init();
+</script>
+</body>
+</html>

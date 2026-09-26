@@ -1,0 +1,163 @@
+spring:
+  application:
+    name: rag-langchain4j
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/rag_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    druid:
+      # 初始连接数
+      initial-size: 5
+      # 最小空闲连接数
+      min-idle: 5
+      # 最大连接数
+      max-active: 20
+      # 获取连接最大等待时间（毫秒）
+      max-wait: 60000
+      # 检测间隔（毫秒），默认60秒
+      time-between-eviction-runs-millis: 60000
+      # 连接最小空闲时间（毫秒），默认10分钟
+      min-evictable-idle-time-millis: 300000
+      # 检测连接是否有效的SQL
+      validation-query: SELECT 1
+      # 建议空闲时检测连接有效性
+      test-while-idle: true
+      # 获取连接时不检测
+      test-on-borrow: false
+      # 归还连接时不检测
+      test-on-return: false
+      # 是否缓存PreparedStatement
+      pool-prepared-statements: true
+      # 最大缓存PreparedStatement数量
+      max-pool-prepared-statement-per-connection-size: 20
+      # 监控统计过滤器
+      filters: stat,wall,slf4j
+      # StatViewServlet（监控页面）
+      stat-view-servlet:
+        enabled: true
+        url-pattern: /druid/*
+        login-username: admin
+        login-password: admin123
+        allow: 127.0.0.1
+      # WebStatFilter（监控Web请求）
+      web-stat-filter:
+        enabled: true
+        url-pattern: /*
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+      # 连接属性
+      connection-properties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  # Redis 配置（Redisson 自动读取并创建 RedissonClient）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      password: 123456
+      timeout: 10000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+# MinIO 配置
+minio:
+  endpoint: http://localhost:9000
+  external-endpoint: http://localhost:9000
+  access-key: admin
+  secret-key: admin123
+  bucket-name: rag-documents
+
+# MinerU 配置
+mineru:
+  api-url: https://mineru.net
+  token: your-mineru-token
+  model-version: vlm
+
+# 阿里百炼大模型配置（图片识别）
+bailian:
+  api-key: 你的apikey
+  base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: qwen-vl-max
+  # 会话标题摘要模型（轻量级文本模型，用于生成对话标题）
+  title-model: qwen-turbo
+  # 通用聊天模型（用于非业务相关的闲聊对话）
+  general-model: qwen-plus
+  # RAG 知识库问答模型（用于检索增强生成）
+  rag-model: qwen-plus
+
+# 百炼 Embedding 模型配置
+embedding:
+  api-key: 你的apikey
+  base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: text-embedding-v3
+
+# Elasticsearch 配置
+elasticsearch:
+  url: http://localhost:9200
+  index-name: rag-documents
+
+# Neo4j 配置
+neo4j:
+  uri: bolt://localhost:7687
+  username: neo4j
+  password: neo4jlujiajia
+
+# Sa-Token 配置
+sa-token:
+  token-name: satoken
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-read-header: true
+  is-read-cookie: false
+
+# 飞书机器人配置
+feishu:
+  app-id: your-app-id
+  app-secret: your-app-secret
+  verification-token: your-verification-token
+  encrypt-key:
+  # MinIO 外部可访问地址，用于飞书卡片中展示图片（替换内部 localhost 地址）
+  external-image-base-url: http://your-public-ip:9000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Actuator + Prometheus 指标暴露
+management:
+  endpoints:
+    web:
+      exposure:
+        # 暴露健康检查、Prometheus 抓取端点、指标详情
+        include: health,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# RAG 检索与对话保护配置
+rag:
+  # 各检索源（ES/Neo4j/SQL）单次检索超时时间（秒），超时降级为空结果
+  retrieval:
+    timeout-seconds: 5
+  # AI 对话限流：每用户 window-seconds 秒内最多 permits 次请求
+  chat:
+    rate-limit-permits: 10
+    rate-limit-seconds: 10
+  # 会话历史消息 Redis 短 TTL 缓存（秒），消息落库后主动失效
+  memory-cache-ttl-seconds: 60

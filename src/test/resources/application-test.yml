@@ -1,0 +1,123 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/rag_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&connectTimeout=60000
+    username: test
+    password: test
+    druid:
+      initial-size: 2
+      min-idle: 2
+      max-active: 10
+      max-wait: 30000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      filters: stat
+      stat-view-servlet:
+        enabled: false
+      web-stat-filter:
+        enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      password:
+      timeout: 10000ms
+
+# MinIO (mocked in tests, but need valid config for bean initialization)
+minio:
+  endpoint: http://localhost:9000
+  external-endpoint: http://localhost:9000
+  access-key: test
+  secret-key: test12345
+  bucket-name: rag-documents
+
+# MinerU (not used in integration tests)
+mineru:
+  api-url: http://localhost:9999
+  token: test-token
+  model-version: vlm
+
+# Bailian (mocked in tests, dummy values for bean initialization)
+bailian:
+  api-key: test-api-key
+  base-url: http://localhost:9999
+  model: test-model
+  title-model: test-title-model
+  general-model: test-general-model
+  rag-model: test-rag-model
+
+# Embedding (fake model in tests)
+embedding:
+  api-key: test-api-key
+  base-url: http://localhost:9999
+  model: test-embedding-model
+
+# Elasticsearch (overridden by testcontainer)
+elasticsearch:
+  url: http://localhost:9200
+  index-name: rag-documents-test
+
+# Neo4j (mocked in tests)
+neo4j:
+  uri: bolt://localhost:7687
+  username: test
+  password: test
+
+# Sa-Token
+sa-token:
+  token-name: satoken
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-read-header: true
+  is-read-cookie: false
+
+# Feishu (disabled in tests)
+feishu:
+  app-id: test
+  app-secret: test
+  verification-token: test
+  encrypt-key:
+  external-image-base-url: http://localhost:9000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# RAG
+rag:
+  retrieval:
+    timeout-seconds: 5
+  chat:
+    rate-limit-permits: 100
+    rate-limit-seconds: 10
+  memory-cache-ttl-seconds: 60
+
+logging:
+  level:
+    com.lujia.rag.raglangchain4j: DEBUG
+    org.testcontainers: INFO
